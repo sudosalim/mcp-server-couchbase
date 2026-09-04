@@ -16,6 +16,15 @@ DEFAULT_WORKERS = 1
 # content, which is the richer, spec-preferred behaviour.
 DEFAULT_DISABLE_STRUCTURED_OUTPUT = False
 
+# Performance-diagnostics instrumentation (tracing/metrics). Off by default.
+DEFAULT_OTEL_ENABLED = False
+# "console" prints spans to stderr (no external collector needed, good for a
+# quick local check); "otlp" ships them to a real collector (Jaeger, Tempo,
+# ...) via CB_MCP_OTEL_EXPORTER_ENDPOINT.
+DEFAULT_OTEL_EXPORTER = "console"
+ALLOWED_OTEL_EXPORTERS = ("console", "otlp")
+DEFAULT_METRICS_ENABLED = False
+
 # Allowed Transport Types
 ALLOWED_TRANSPORTS = ["stdio", "http", "sse"]
 NETWORK_TRANSPORTS = ["http", "sse"]

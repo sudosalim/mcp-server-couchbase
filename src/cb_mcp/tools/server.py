@@ -13,11 +13,8 @@ from fastmcp import Context
 from ..utils.config import get_settings
 from ..utils.connection import connect_to_bucket
 from ..utils.constants import MCP_SERVER_NAME
-from ..utils.context import (
-    get_cluster_connection,
-    get_cluster_provider,
-    get_logging_config,
-)
+from ..utils.context import (get_cluster_connection, get_cluster_provider,
+                             get_logging_config)
 from .query import run_cluster_query
 
 logger = logging.getLogger(f"{MCP_SERVER_NAME}.tools.server")
@@ -48,6 +45,11 @@ def get_server_configuration_status(ctx: Context) -> dict[str, Any]:
         # carry text content only. Defaults to False for hosts that don't
         # populate the key, matching FastMCP's own inferred-schema behaviour.
         "disable_structured_output": settings.get("disable_structured_output", False),
+        # Performance-diagnostics instrumentation. otel_enabled reflects whether a TracerProvider was actually registered.
+        # This can be False even when requested, if the OpenTelemetry SDK isn't installed.
+        "otel_enabled": settings.get("otel_enabled", False),
+        "otel_exporter": settings.get("otel_exporter"),
+        "metrics_enabled": settings.get("metrics_enabled", False),
         "disabled_tools": sorted(settings.get("disabled_tools", set())),
         "confirmation_required_tools": sorted(
             settings.get("confirmation_required_tools", set())

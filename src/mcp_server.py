@@ -16,50 +16,30 @@ from fastmcp.tools import FunctionTool
 
 # Reusable tools and utilities from the cb_mcp package
 from cb_mcp.auth import OAuthConfigError, resolve_oauth
-from cb_mcp.tool_registration import (
-    TextOnlyFunctionTool,
-    prepare_tools_for_registration,
-)
+from cb_mcp.tool_registration import (TextOnlyFunctionTool,
+                                      prepare_tools_for_registration)
 from cb_mcp.tools import TOOL_ANNOTATIONS
-from cb_mcp.utils import (
-    ALLOWED_OAUTH_ALGORITHMS,
-    ALLOWED_TRANSPORTS,
-    DEFAULT_DISABLE_STRUCTURED_OUTPUT,
-    DEFAULT_HOST,
-    DEFAULT_LOG_BACKUP_COUNT,
-    DEFAULT_LOG_FILE,
-    DEFAULT_LOG_LEVEL,
-    DEFAULT_LOG_SINKS,
-    DEFAULT_OAUTH_ALGORITHM,
-    DEFAULT_PORT,
-    DEFAULT_READ_ONLY_MODE,
-    DEFAULT_TRANSPORT,
-    DEFAULT_WORKERS,
-    MCP_SERVER_NAME,
-    NETWORK_TRANSPORTS,
-    NETWORK_TRANSPORTS_SDK_MAPPING,
-    SCOPE_READ,
-    SCOPE_WRITE,
-    WORKER_APP_IMPORT_STRING,
-    AppContext,
-    WorkerConfigError,
-    apply_thread_pool_limit,
-    configure_logging,
-    export_worker_config,
-    get_resolved_logging_config,
-    load_worker_config,
-    log_environment_info,
-    resolve_worker_settings,
-    send_install_ping,
-    uvicorn_log_level,
-    validate_log_level,
-    validate_log_path,
-    validate_log_sinks,
-    validate_scope_label,
-    validate_stateless_http,
-    worker_log_file,
-)
-
+from cb_mcp.utils import (ALLOWED_OAUTH_ALGORITHMS, ALLOWED_OTEL_EXPORTERS,
+                          ALLOWED_TRANSPORTS,
+                          DEFAULT_DISABLE_STRUCTURED_OUTPUT, DEFAULT_HOST,
+                          DEFAULT_LOG_BACKUP_COUNT, DEFAULT_LOG_FILE,
+                          DEFAULT_LOG_LEVEL, DEFAULT_LOG_SINKS,
+                          DEFAULT_METRICS_ENABLED, DEFAULT_OAUTH_ALGORITHM,
+                          DEFAULT_OTEL_ENABLED, DEFAULT_OTEL_EXPORTER,
+                          DEFAULT_PORT, DEFAULT_READ_ONLY_MODE,
+                          DEFAULT_TRANSPORT, DEFAULT_WORKERS, MCP_SERVER_NAME,
+                          NETWORK_TRANSPORTS, NETWORK_TRANSPORTS_SDK_MAPPING,
+                          SCOPE_READ, SCOPE_WRITE, WORKER_APP_IMPORT_STRING,
+                          AppContext, WorkerConfigError,
+                          apply_thread_pool_limit, configure_logging,
+                          configure_tracing, export_worker_config,
+                          get_resolved_logging_config, load_worker_config,
+                          log_environment_info, register_metrics_route,
+                          resolve_worker_settings, send_install_ping,
+                          uvicorn_log_level, validate_log_level,
+                          validate_log_path, validate_log_sinks,
+                          validate_scope_label, validate_stateless_http,
+                          worker_log_file)
 # Standalone-host provider implementation
 from providers.static import StaticClusterProvider
 
@@ -158,6 +138,13 @@ def build_mcp_server(params: Mapping[str, Any]) -> FastMCP:
     transport = params["transport"]
     read_only_mode = params["read_only_mode"]
     disable_structured_output = params["disable_structured_output"]
+    metrics_enabled = params["metrics_enabled"] and transport in NETWORK_TRANSPORTS
+
+    # Sets process-global OpenTelemetry state, so this must happen once per
+    # process, including once per --workers child, since build_mcp_server
+    # runs there too (see create_app). Resolved before `settings` is built so
+    # the real activation state (not just the requested flag) can be reported.
+    otel_enabled = configure_tracing(params)
 
     auth = resolve_oauth_from_params(params)
 
@@ -198,6 +185,13 @@ def build_mcp_server(params: Mapping[str, Any]) -> FastMCP:
         # carry text content only. Reported because it changes the shape of
         # every tool response a client sees.
         "disable_structured_output": disable_structured_output,
+        # Performance-diagnostics instrumentation. otel_enabled is the real
+        # activation state from configure_tracing (False if the SDK isn't
+        # installed even when requested), not just the raw flag.
+        "otel_enabled": otel_enabled,
+        "otel_exporter": params["otel_exporter"],
+        "otel_exporter_endpoint": params["otel_exporter_endpoint"],
+        "metrics_enabled": metrics_enabled,
         # OAuth resource-server config (non-secret IdP coordinates), captured
         # for the env-info diagnostic and get_server_configuration_status.
         # ``oauth_enabled`` is whether OAuth is active: resolve_oauth returns
@@ -259,6 +253,7 @@ def build_mcp_server(params: Mapping[str, Any]) -> FastMCP:
             logger.info("Closing MCP server")
 
     mcp = FastMCP(MCP_SERVER_NAME, lifespan=app_lifespan, auth=auth)
+    register_metrics_route(mcp, metrics_enabled)
 
     logger.info(
         f"Registering {len(final_tools)} tool(s) with modes (read_only_mode={read_only_mode})"
@@ -457,6 +452,49 @@ def run_workers(params: Mapping[str, Any]) -> None:
     "content. Use this with clients that mishandle or reject a tool's "
     "structured output, or to avoid sending each result twice. Applies to all "
     "tools; it cannot be set per tool.",
+)
+@click.option(
+    "--otel-enabled",
+    "otel_enabled",
+    envvar="CB_MCP_OTEL_ENABLED",
+    type=bool,
+    default=DEFAULT_OTEL_ENABLED,
+    help="Enable OpenTelemetry tracing. FastMCP already wraps every tool "
+    "call in a span (tool name, session id, auth context); this registers "
+    "the SDK/exporter that turns those spans from a no-op into real output. "
+    "Requires the OpenTelemetry SDK to be installed. Logs a warning and "
+    "stays disabled otherwise. Diagnostic-only; off by default.",
+)
+@click.option(
+    "--otel-exporter",
+    "otel_exporter",
+    envvar="CB_MCP_OTEL_EXPORTER",
+    type=click.Choice(ALLOWED_OTEL_EXPORTERS),
+    default=DEFAULT_OTEL_EXPORTER,
+    help="Where --otel-enabled spans go. 'console' prints them to stderr "
+    "(no collector needed, good for a quick local check). 'otlp' ships them "
+    "to a real collector (Jaeger, Tempo, ...) at --otel-exporter-endpoint.",
+)
+@click.option(
+    "--otel-exporter-endpoint",
+    "otel_exporter_endpoint",
+    envvar="CB_MCP_OTEL_EXPORTER_ENDPOINT",
+    default=None,
+    help="Collector endpoint for --otel-exporter=otlp (e.g. "
+    "http://localhost:4318/v1/traces). Unset falls back to the "
+    "OpenTelemetry SDK's own default resolution (the OTEL_EXPORTER_OTLP_ENDPOINT "
+    "env var, then http://localhost:4318). Ignored for --otel-exporter=console.",
+)
+@click.option(
+    "--metrics-enabled",
+    "metrics_enabled",
+    envvar="CB_MCP_METRICS_ENABLED",
+    type=bool,
+    default=DEFAULT_METRICS_ENABLED,
+    help="Expose a Prometheus /metrics endpoint (process CPU/RSS/open-fds, "
+    "Python GC, interpreter info) for --transport=http. Requires the "
+    "prometheus-client package. Logs a warning and stays disabled "
+    "otherwise. Diagnostic-only; off by default, and a no-op for stdio.",
 )
 @click.option(
     "--disabled-tools",
@@ -684,6 +722,10 @@ def main(
     thread_pool_size,
     stateless_http,
     disable_structured_output,
+    otel_enabled,
+    otel_exporter,
+    otel_exporter_endpoint,
+    metrics_enabled,
     disabled_tools,
     confirmation_required_tools,
     oauth_jwks_uri,

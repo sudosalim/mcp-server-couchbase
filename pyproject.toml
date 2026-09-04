@@ -40,6 +40,12 @@ dev = [
     "pytest-cov>=7.0.0",
     "openai>=2.0.0,<3.0.0",
 ]
+# Performance-diagnostics instrumentation (--otel-enabled/--metrics-enabled).
+otel = [
+    "opentelemetry-sdk>=1.27.0,<2.0.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.27.0,<2.0.0",
+    "prometheus-client>=0.21.0,<1.0.0",
+]
 
 # Ruff configuration
 [tool.ruff]
@@ -140,6 +146,11 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # Dev-only data-seeding script: queries/URLs are built from internal,
 # hardcoded values, not attacker-controlled input.
 "scripts/setup_test_data.py" = ["S110", "S310", "S608"]
+# opentelemetry/prometheus-client/starlette are optional ([otel] extra).
+# These modules must still import cleanly without them, so the imports are
+# deliberately deferred until the corresponding feature flag is on.
+"src/cb_mcp/utils/tracing.py" = ["PLC0415"]
+"src/cb_mcp/utils/metrics.py" = ["PLC0415"]
 
 [tool.ruff.lint.isort]
 # Organize imports

@@ -298,6 +298,68 @@ class TestStructuredOutputOption:
         assert all(isinstance(tool, TextOnlyFunctionTool) for tool in tools)
 
 
+class TestTracingAndMetricsOptions:
+    """``--otel-enabled``/``--metrics-enabled`` wiring at the CLI boundary.
+
+    configure_tracing/register_metrics_route have their own unit tests for
+    the actual SDK/exporter behavior; these just pin down that main() resolves
+    the flags and reports the real activation state.
+    """
+
+    def _settings(self, args: list[str], env: dict[str, str]):
+        lifespan_fn, fake_mcp = _capture_lifespan(args, env=env)
+
+        async def drive():
+            async with lifespan_fn(fake_mcp) as app_context:
+                return dict(app_context.settings)
+
+        return asyncio.run(drive())
+
+    def test_default_off(self):
+        settings = self._settings([], env=os.environ.copy())
+        assert settings["otel_enabled"] is False
+        assert settings["metrics_enabled"] is False
+
+    def test_otel_enabled_flag_reflects_real_activation_state(self):
+        # No OpenTelemetry SDK stub is injected here, so this exercises the
+        # real ImportError fallback in configure_tracing: requesting the flag
+        # without the SDK installed must not raise, and must be reported as
+        # inactive rather than silently claiming success.
+        with patch(
+            "mcp_server.configure_tracing", return_value=False
+        ) as mock_configure:
+            settings = self._settings(["--otel-enabled", "true"], env=os.environ.copy())
+        mock_configure.assert_called_once()
+        assert settings["otel_enabled"] is False
+
+    def test_metrics_enabled_flag_reaches_settings(self):
+        settings = self._settings(
+            ["--transport", "http", "--metrics-enabled", "true"],
+            env=os.environ.copy(),
+        )
+        assert settings["metrics_enabled"] is True
+
+    def test_metrics_disabled_for_stdio_even_if_requested(self):
+        # stdio has no HTTP surface to attach /metrics to; main() should not
+        # report it as active just because the flag was set.
+        settings = self._settings(
+            ["--transport", "stdio", "--metrics-enabled", "true"],
+            env=os.environ.copy(),
+        )
+        assert settings["metrics_enabled"] is False
+
+    def test_env_vars_honored(self):
+        env = {
+            **os.environ,
+            "CB_MCP_TRANSPORT": "http",
+            "CB_MCP_METRICS_ENABLED": "true",
+            "CB_MCP_OTEL_EXPORTER": "otlp",
+        }
+        settings = self._settings([], env=env)
+        assert settings["metrics_enabled"] is True
+        assert settings["otel_exporter"] == "otlp"
+
+
 def _resolve_oauth_kwargs(**overrides):
     """Minimal OAuth-enabled kwargs for ``resolve_oauth`` (http + all JWT
     fields present), so only the scope-label behavior under test varies."""

@@ -33,6 +33,7 @@ from .constants import (
     ALLOWED_LOG_LEVELS,
     ALLOWED_LOG_SINKS,
     ALLOWED_OAUTH_ALGORITHMS,
+    ALLOWED_OTEL_EXPORTERS,
     ALLOWED_TRANSPORTS,
     DEFAULT_DISABLE_STRUCTURED_OUTPUT,
     DEFAULT_HOST,
@@ -42,7 +43,10 @@ from .constants import (
     DEFAULT_LOG_LEVEL,
     DEFAULT_LOG_MAX_BYTES,
     DEFAULT_LOG_SINKS,
+    DEFAULT_METRICS_ENABLED,
     DEFAULT_OAUTH_ALGORITHM,
+    DEFAULT_OTEL_ENABLED,
+    DEFAULT_OTEL_EXPORTER,
     DEFAULT_PORT,
     DEFAULT_READ_ONLY_MODE,
     DEFAULT_TRANSPORT,
@@ -83,6 +87,9 @@ from .logging import (
     parse_log_sinks,
 )
 
+# Performance diagnostics: tracing + metrics
+from .metrics import register_metrics_route
+
 # Multi-worker (multi-process) support
 from .multiprocess import (
     ALLOWED_STATELESS_HTTP_VALUES,
@@ -101,6 +108,7 @@ from .scope_enforcement import required_scopes_for_tool, wrap_with_scope_check
 
 # Reo.dev telemetry
 from .telemetry import send_install_ping, wrap_with_telemetry
+from .tracing import configure_tracing
 
 # Note: Individual modules create their own hierarchical loggers using:
 # logger = logging.getLogger(f"{MCP_SERVER_NAME}.module.name")
@@ -137,6 +145,10 @@ __all__ = [
     "DEFAULT_PORT",
     "DEFAULT_WORKERS",
     "DEFAULT_DISABLE_STRUCTURED_OUTPUT",
+    "DEFAULT_OTEL_ENABLED",
+    "DEFAULT_OTEL_EXPORTER",
+    "ALLOWED_OTEL_EXPORTERS",
+    "DEFAULT_METRICS_ENABLED",
     "ALLOWED_TRANSPORTS",
     "NETWORK_TRANSPORTS",
     "NETWORK_TRANSPORTS_SDK_MAPPING",
@@ -177,4 +189,7 @@ __all__ = [
     # Reo.dev telemetry
     "send_install_ping",
     "wrap_with_telemetry",
+    # Performance diagnostics: tracing + metrics
+    "configure_tracing",
+    "register_metrics_route",
 ]

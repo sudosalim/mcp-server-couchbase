@@ -53,6 +53,12 @@ _SAFE_SETTINGS_KEYS = (
     # Whether tool results carry structured content, which changes the response
     # shape a client sees for every tool call.
     "disable_structured_output",
+    # Performance-diagnostics instrumentation: whether tracing/metrics are on,
+    # and where spans are exported to.
+    "otel_enabled",
+    "otel_exporter",
+    "otel_exporter_endpoint",
+    "metrics_enabled",
     "disabled_tools",
     "confirmation_required_tools",
     "connection_string",
