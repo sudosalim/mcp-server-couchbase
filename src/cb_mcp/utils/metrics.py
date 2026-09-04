@@ -1,6 +1,6 @@
 """Prometheus ``/metrics`` endpoint.
 
-Exposes ``prometheus_client``'s default collectors process, GC, and platform (Python version, for labeling).
+Exposes ``prometheus_client``'s default collectors: process, GC, platform.
 """
 
 import logging
@@ -17,22 +17,18 @@ METRICS_PATH = "/metrics"
 def register_metrics_route(mcp: FastMCP, enabled: bool) -> None:
     """Register the ``/metrics`` route on ``mcp`` if ``enabled``.
 
-    Must run before the Starlette app is built from ``mcp`` (i.e. before
-    ``mcp.run()`` or ``mcp.http_app()``), since ``custom_route`` registers
-    onto the FastMCP instance itself. No-op for non-HTTP transports: stdio
-    has no HTTP surface to attach a route to, so it's the caller's job to
-    only enable this for network transports.
+    Must run before the Starlette app is built (before ``mcp.run()`` /
+    ``http_app()``). Caller must gate ``enabled`` to network transports.
     """
     if not enabled:
         return
 
     try:
-        from prometheus_client import (CONTENT_TYPE_LATEST, REGISTRY,
-                                       generate_latest)
+        from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
     except ImportError:
         logger.warning(
             "metrics_enabled is set but prometheus-client isn't installed "
-            "(pip install couchbase-mcp-server[otel]) — /metrics stays absent."
+            "(pip install couchbase-mcp-server[otel]). /metrics stays absent."
         )
         return
 

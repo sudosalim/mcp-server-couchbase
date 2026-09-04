@@ -21,8 +21,20 @@ from ..utils.connection import connect_to_bucket, format_keyspace
 from ..utils.constants import MCP_SERVER_NAME
 from ..utils.context import get_cluster_connection
 from ..utils.responses import tool_error, tool_success
+from ..utils.tracing import couchbase_span
 
 logger = logging.getLogger(f"{MCP_SERVER_NAME}.tools.kv")
+
+
+def _keyspace_attrs(
+    bucket_name: str, scope_name: str, collection_name: str
+) -> dict[str, str]:
+    """Span attributes identifying which keyspace a KV call targeted."""
+    return {
+        "db.couchbase.bucket": bucket_name,
+        "db.couchbase.scope": scope_name,
+        "db.couchbase.collection": collection_name,
+    }
 
 
 def get_document_by_id(
@@ -41,7 +53,10 @@ def get_document_by_id(
     try:
         logger.debug(f"Getting document from {keyspace}")
         collection = bucket.scope(scope_name).collection(collection_name)
-        result = collection.get(document_id)
+        with couchbase_span(
+            "kv.get", **_keyspace_attrs(bucket_name, scope_name, collection_name)
+        ):
+            result = collection.get(document_id)
         logger.info(f"Retrieved document from {keyspace}")
         return result.content_as[dict]
     except Exception as e:
@@ -72,7 +87,10 @@ def upsert_document_by_id(
     try:
         logger.debug(f"Upserting document in {keyspace}")
         collection = bucket.scope(scope_name).collection(collection_name)
-        collection.upsert(document_id, document_content)
+        with couchbase_span(
+            "kv.upsert", **_keyspace_attrs(bucket_name, scope_name, collection_name)
+        ):
+            collection.upsert(document_id, document_content)
         logger.info(f"Successfully upserted document in {keyspace}")
         return tool_success()
     except Exception as e:
@@ -97,7 +115,10 @@ def delete_document_by_id(
     try:
         logger.debug(f"Deleting document from {keyspace}")
         collection = bucket.scope(scope_name).collection(collection_name)
-        collection.remove(document_id)
+        with couchbase_span(
+            "kv.remove", **_keyspace_attrs(bucket_name, scope_name, collection_name)
+        ):
+            collection.remove(document_id)
         logger.info(f"Successfully deleted document from {keyspace}")
         return tool_success()
     except Exception as e:
@@ -126,7 +147,10 @@ def insert_document_by_id(
     try:
         logger.debug(f"Inserting document in {keyspace}")
         collection = bucket.scope(scope_name).collection(collection_name)
-        collection.insert(document_id, document_content)
+        with couchbase_span(
+            "kv.insert", **_keyspace_attrs(bucket_name, scope_name, collection_name)
+        ):
+            collection.insert(document_id, document_content)
         logger.info(f"Successfully inserted document in {keyspace}")
         return tool_success()
     except Exception as e:
@@ -155,7 +179,10 @@ def replace_document_by_id(
     try:
         logger.debug(f"Replacing document in {keyspace}")
         collection = bucket.scope(scope_name).collection(collection_name)
-        collection.replace(document_id, document_content)
+        with couchbase_span(
+            "kv.replace", **_keyspace_attrs(bucket_name, scope_name, collection_name)
+        ):
+            collection.replace(document_id, document_content)
         logger.info(f"Successfully replaced document in {keyspace}")
         return tool_success()
     except Exception as e:
@@ -246,7 +273,10 @@ def lookup_subdocument(
     try:
         logger.debug(f"Performing sub-document lookup in {keyspace}")
         collection = bucket.scope(scope_name).collection(collection_name)
-        result = collection.lookup_in(document_id, specs)
+        with couchbase_span(
+            "kv.lookup_in", **_keyspace_attrs(bucket_name, scope_name, collection_name)
+        ):
+            result = collection.lookup_in(document_id, specs)
     except Exception as e:
         logger.error(
             f"Error performing sub-document lookup in {keyspace}: {e}", exc_info=True
@@ -431,7 +461,10 @@ def mutate_subdocument(
     try:
         logger.debug(f"Performing sub-document mutation in {keyspace}")
         collection = bucket.scope(scope_name).collection(collection_name)
-        result = collection.mutate_in(document_id, specs)
+        with couchbase_span(
+            "kv.mutate_in", **_keyspace_attrs(bucket_name, scope_name, collection_name)
+        ):
+            result = collection.mutate_in(document_id, specs)
     except Exception as e:
         error_context = getattr(e, "error_context", None)
         failed_index = getattr(error_context, "first_error_index", None)

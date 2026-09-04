@@ -15,10 +15,8 @@ from lark_sqlpp import modifies_data, modifies_structure, parse_sqlpp
 from ..utils.connection import connect_to_bucket, format_keyspace
 from ..utils.constants import MCP_SERVER_NAME, SCOPE_WRITE
 from ..utils.context import get_cluster_connection
-from ..utils.query_utils import (
-    evaluate_query_plan,
-    extract_plan_from_explain_results,
-)
+from ..utils.query_utils import evaluate_query_plan, extract_plan_from_explain_results
+from ..utils.tracing import couchbase_span
 
 logger = logging.getLogger(f"{MCP_SERVER_NAME}.tools.query")
 
@@ -181,13 +179,19 @@ def run_sql_plus_plus_query(
         # Reached only for read-only queries (or when writes are allowed).
         # Forward named parameters only when provided so existing callers that
         # pass none keep the exact previous behaviour.
-        result = (
-            scope.query(query, named_parameters=named_parameters)
-            if named_parameters is not None
-            else scope.query(query)
-        )
-        for row in result:
-            results.append(row)
+        # Span covers query() + iteration: rows stream lazily, so that's
+        # where the real execution time is spent.
+        with couchbase_span(
+            "query.sqlpp",
+            **{"db.couchbase.bucket": bucket_name, "db.couchbase.scope": scope_name},
+        ):
+            result = (
+                scope.query(query, named_parameters=named_parameters)
+                if named_parameters is not None
+                else scope.query(query)
+            )
+            for row in result:
+                results.append(row)
         logger.info(
             f"SQL++ query in {bucket_name}.{scope_name} returned {len(results)} row(s)"
         )
@@ -245,9 +249,10 @@ def run_cluster_query(ctx: Context, query: str, **kwargs: Any) -> list[dict[str,
 
     try:
         logger.debug("Executing cluster query")
-        result = cluster.query(query, **kwargs)
-        for row in result:
-            results.append(row)
+        with couchbase_span("query.cluster"):
+            result = cluster.query(query, **kwargs)
+            for row in result:
+                results.append(row)
         logger.info(f"Cluster query returned {len(results)} row(s)")
         return results
     except Exception as e:

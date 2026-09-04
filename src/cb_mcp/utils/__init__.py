@@ -108,7 +108,7 @@ from .scope_enforcement import required_scopes_for_tool, wrap_with_scope_check
 
 # Reo.dev telemetry
 from .telemetry import send_install_ping, wrap_with_telemetry
-from .tracing import configure_tracing
+from .tracing import configure_tracing, couchbase_span
 
 # Note: Individual modules create their own hierarchical loggers using:
 # logger = logging.getLogger(f"{MCP_SERVER_NAME}.module.name")
@@ -191,5 +191,6 @@ __all__ = [
     "wrap_with_telemetry",
     # Performance diagnostics: tracing + metrics
     "configure_tracing",
+    "couchbase_span",
     "register_metrics_route",
 ]

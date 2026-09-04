@@ -13,8 +13,11 @@ from fastmcp import Context
 from ..utils.config import get_settings
 from ..utils.connection import connect_to_bucket
 from ..utils.constants import MCP_SERVER_NAME
-from ..utils.context import (get_cluster_connection, get_cluster_provider,
-                             get_logging_config)
+from ..utils.context import (
+    get_cluster_connection,
+    get_cluster_provider,
+    get_logging_config,
+)
 from .query import run_cluster_query
 
 logger = logging.getLogger(f"{MCP_SERVER_NAME}.tools.server")
