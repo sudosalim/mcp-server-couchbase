@@ -52,6 +52,7 @@ from cb_mcp.utils import (
     configure_tracing,
     export_worker_config,
     get_resolved_logging_config,
+    instrument_thread_pool_queue_wait,
     load_worker_config,
     log_environment_info,
     register_metrics_route,
@@ -172,6 +173,9 @@ def build_mcp_server(params: Mapping[str, Any]) -> FastMCP:
     # runs there too (see create_app). Resolved before `settings` is built so
     # the real activation state (not just the requested flag) can be reported.
     otel_enabled = configure_tracing(params)
+    # Also process-global (patches a module-level function reference), same
+    # once-per-process rationale as configure_tracing above.
+    instrument_thread_pool_queue_wait(metrics_enabled)
 
     auth = resolve_oauth_from_params(params)
 
