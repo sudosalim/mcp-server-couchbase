@@ -88,7 +88,7 @@ from .logging import (
 )
 
 # Performance diagnostics: tracing + metrics
-from .metrics import register_metrics_route
+from .metrics import register_metrics_route, start_event_loop_lag_monitor
 
 # Multi-worker (multi-process) support
 from .multiprocess import (
@@ -193,4 +193,5 @@ __all__ = [
     "configure_tracing",
     "couchbase_span",
     "register_metrics_route",
+    "start_event_loop_lag_monitor",
 ]

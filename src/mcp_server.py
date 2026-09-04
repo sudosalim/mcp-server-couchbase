@@ -57,6 +57,7 @@ from cb_mcp.utils import (
     register_metrics_route,
     resolve_worker_settings,
     send_install_ping,
+    start_event_loop_lag_monitor,
     uvicorn_log_level,
     validate_log_level,
     validate_log_path,
@@ -268,12 +269,15 @@ def build_mcp_server(params: Mapping[str, Any]) -> FastMCP:
             read_only_mode=read_only_mode,
             logging_config=resolved_logging.as_dict() if resolved_logging else None,
         )
+        lag_monitor_task = start_event_loop_lag_monitor(metrics_enabled)
         try:
             yield app_context
         except Exception as e:
             logger.error(f"Error in app lifespan: {e}", exc_info=True)
             raise
         finally:
+            if lag_monitor_task is not None:
+                lag_monitor_task.cancel()
             if app_context.cluster_provider:
                 app_context.cluster_provider.close()
             logger.info("Closing MCP server")
